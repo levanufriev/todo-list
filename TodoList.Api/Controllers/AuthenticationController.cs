@@ -1,42 +1,43 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using TodoList.Application.Services.Authentication;
+﻿using MapsterMapper;
+using MediatR;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using TodoList.Application.Authentication.Commands.Register;
+using TodoList.Application.Authentication.Queries.Login;
 using TodoList.Contracts.Authentication;
+using TodoList.Domain.Common.Errors;
 
 namespace TodoList.Api.Controllers;
 
-[ApiController]
 [Route("auth")]
-public class AuthenticationController(IAuthenticationService authenticationService) : ControllerBase
+[AllowAnonymous]
+public class AuthenticationController(ISender mediator,
+    IMapper mapper) : ApiController
 {
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterRequest request)
     {
-        var authResult = await authenticationService.Register(request.FirstName, request.LastName, request.Email, request.Password);
+        var command = mapper.Map<RegisterCommand>(request);
+        var authResult = await mediator.Send(command);
 
-        var response = new AuthenticationResponse(
-                authResult.User.Id,
-                authResult.User.FirstName,
-                authResult.User.LastName,
-                authResult.User.Email,
-                authResult.Token
-            );
-
-        return Ok(response);
+        return authResult.Match(
+            authResult => Ok(mapper.Map<AuthenticationResponse>(authResult)),
+            errors => Problem(errors));
     }
 
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginRequest request)
     {
-        var authResult = await authenticationService.Login(request.Email, request.Password);
+        var query = mapper.Map<LoginQuery>(request);
+        var authResult = await mediator.Send(query);
 
-        var response = new AuthenticationResponse(
-                authResult.User.Id,
-                authResult.User.FirstName,
-                authResult.User.LastName,
-                authResult.User.Email,
-                authResult.Token
-            );
+        if (authResult.IsError && authResult.FirstError == Errors.Authentication.InvalidCredentials)
+        {
+            return Problem(statusCode: StatusCodes.Status401Unauthorized, title: authResult.FirstError.Description);
+        }
 
-        return Ok(response);
+        return authResult.Match(
+            authResult => Ok(mapper.Map<AuthenticationResponse>(authResult)),
+            errors => Problem(errors));
     }
 }

@@ -1,13 +1,21 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using TodoList.Application.Services.Authentication;
-
+﻿using ErrorOr;
+using FluentValidation;
+using MediatR;
+using Microsoft.Extensions.DependencyInjection;
+using System.Reflection;
+using TodoList.Application.Authentication.Commands.Register;
+using TodoList.Application.Authentication.Common;
+using TodoList.Application.Common.Behaviors;
 namespace TodoList.Application;
 
 public static class DependencyInjection
 {
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
-        services.AddScoped<IAuthenticationService, AuthenticationService>();
+        services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(DependencyInjection).Assembly));
+        
+        services.AddScoped(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
+        services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
 
         return services;
     }
